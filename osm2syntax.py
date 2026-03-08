@@ -484,9 +484,9 @@ def load_custom_font():
     FR_PRIVATE = 0x10
 
     if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
+        base_path = os.path.dirname(sys.executable)
     else:
-        base_path = os.path.dirname(__file__)
+        base_path = os.path.dirname(os.path.abspath(__file__))
 
     font_path_regular = os.path.join(base_path, "fonts", "IBMPlexSans-Regular.ttf")
     font_path_medium = os.path.join(base_path, "fonts", "IBMPlexSans-Medium.ttf")
