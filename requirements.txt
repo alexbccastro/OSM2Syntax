@@ -1,0 +1,7 @@
+matplotlib~=3.10.8
+networkx~=3.6.1
+numpy~=2.4.2
+osmnx~=2.1.0
+ttkbootstrap~=1.20.1
+pillow~=12.1.1
+shapely~=2.1.2
