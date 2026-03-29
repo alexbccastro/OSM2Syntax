@@ -21,8 +21,13 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
 from shapely.geometry import LineString
 
-# Language System
 
+ox.settings.overpass_endpoint = "https://overpass.kumi.systems/api/interpreter"
+ox.settings.timeout = 180
+ox.settings.headers = {"User-Agent": "OSM2Syntax/1.0"}
+
+
+# Language System
 LANG = {
     "en": {
         "download": "Download",
@@ -116,7 +121,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.0
+        OSM2Syntax v.1.0.1
 
         Road-Center Line Preparation Tool for Space Syntax Analysis
 
@@ -228,7 +233,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.0
+        OSM2Syntax v.1.0.1
 
         Ferramenta para preparação de Road-Center Line
         para análise em Sintaxe Espacial
@@ -1187,7 +1192,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.0")
+mainwindow.title("OSM2Syntax, v. 1.0.1")
 mainwindow.resizable(False, False)
 mainwindow.iconbitmap("icon.ico")
 
