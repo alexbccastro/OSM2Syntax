@@ -1192,7 +1192,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.1)
+mainwindow.title("OSM2Syntax, v. 1.0.1")
 mainwindow.resizable(False, False)
 mainwindow.iconbitmap("icon.ico")
 
