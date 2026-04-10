@@ -121,7 +121,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.1
+        OSM2Syntax v.1.0.2
 
         Road-Center Line Preparation Tool for Space Syntax Analysis
 
@@ -140,7 +140,8 @@ LANG = {
         "save_preview_as": "Save Preview As",
         "preview_saved_title": "Saved",
         "preview_saved_message": "Preview saved successfully!",
-        "error_title": "Error"
+        "error_title": "Error",
+        "status_prefix": "Status: "
     },
 
     "pt": {
@@ -233,7 +234,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.1
+        OSM2Syntax v.1.0.2
 
         Ferramenta para preparação de Road-Center Line
         para análise em Sintaxe Espacial
@@ -253,12 +254,12 @@ LANG = {
         "save_preview_as": "Salvar Visualiação Como",
         "preview_saved_title": "Salvo",
         "preview_saved_message": "Visualização salva com sucesso!",
-        "error_title": "Erro"
+        "error_title": "Erro",
+        "status_prefix": "Status: ",
     }
 }
-
 current_lang = "en"
-
+preview_state = "none"  # "none", "loading", "loaded"
 cancel_event = threading.Event()
 
 
@@ -391,6 +392,9 @@ def choose_directory():
 
 
 def clear_all():
+    global preview_state
+    preview_state = "none"
+
     name_checkbutton_var.set(False)
     point_checkbutton_var.set(False)
     simplify_checkbutton_var.set(False)
@@ -457,7 +461,7 @@ def error_progress(message="Error"):
     progress_bar.stop()
     progress_bar.config(mode="determinate", bootstyle="danger")
     progress_bar_var.set(0)
-    status_txt.config(text=f"Status: {message}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{message}")
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal")
     mainwindow.after(0, update_preview_button_state)
@@ -470,13 +474,21 @@ def exit_fullscreen(event=None):
     mainwindow.attributes("-fullscreen", False)
 
 
-def finish_progress(message="Download completed successfully!"):
+def finish_progress(message=None):
     global progress_state
+
+    if message is None:
+        message = LANG[current_lang]["download_completed"]
+
     progress_state = "success"
     progress_bar.stop()
     progress_bar.config(mode="determinate", bootstyle="success")
     progress_bar_var.set(100)
-    status_txt.config(text=f"Status: {message}")
+
+    status_txt.config(
+        text=f"{LANG[current_lang]['status_prefix']}{message}"
+    )
+
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal", cursor="hand2")
     clean_button.config(state="normal", cursor="hand2")
@@ -802,10 +814,10 @@ def run_download():
 
         lang = LANG[current_lang]
 
-        mainwindow.after(0, lambda: finish_progress(lang["download_completed"]))
-        mainwindow.after(0, lambda: messagebox.showinfo(lang["download_completed_title"],
-                                                        f"{lang['download_completed']}\n\n"
-                                                        f"{lang['download_time']}: {download_time:.2f} {lang['seconds']}\n\n"))
+        mainwindow.after(0, lambda: finish_progress())
+        mainwindow.after(0, lambda: messagebox.showinfo(LANG[current_lang]["download_completed_title"],
+                                                        f"{LANG[current_lang]['download_completed']}\n\n"
+                                                        f"{LANG[current_lang]['download_time']}: {download_time:.2f} {lang['seconds']}\n\n"))
 
     except RuntimeError as e:
         if str(e) == LANG[current_lang]["cancelled"]:
@@ -819,19 +831,32 @@ def run_download():
 
 
 def run_preview():
+    global preview_state
     try:
-        mainwindow.after(0, lambda: preview_status.config(text=LANG[current_lang]["preview_loading"]))
+        preview_state = "loading"
+        mainwindow.after(0, lambda: preview_status.config(
+            text=LANG[current_lang]["preview_loading"]
+        ))
 
         g = build_graph_preview()
 
         mainwindow.after(0, lambda: update_plot(g))
-        mainwindow.after(0, lambda: preview_status.config(text=LANG[current_lang]["preview_loaded"]))
+
+        preview_state = "loaded"
+        mainwindow.after(0, lambda: preview_status.config(
+            text=LANG[current_lang]["preview_loaded"]
+        ))
         mainwindow.after(0, lambda: save_preview_button.config(state="normal", cursor="hand2"))
         mainwindow.after(0, lambda: preview_button.config(state="normal", cursor="hand2"))
 
     except Exception as e:
-        mainwindow.after(0, lambda: messagebox.showerror(LANG[current_lang]["preview_error"], str(e)))
-        mainwindow.after(0, lambda: preview_status.config(text=LANG[current_lang]["preview_none"], cursor="hand2"))
+        preview_state = "none"
+        mainwindow.after(0, lambda: messagebox.showerror(
+            LANG[current_lang]["preview_error"], str(e)
+        ))
+        mainwindow.after(0, lambda: preview_status.config(
+            text=LANG[current_lang]["preview_none"]
+        ))
         mainwindow.after(0, lambda: preview_button.config(state="normal", cursor="hand2"))
 
 
@@ -901,7 +926,12 @@ def set_language(lang):
     park_checkbutton.config(text=LANG[lang]["park"])
     water_checkbutton.config(text=LANG[lang]["water"])
     saveas_label.config(text=LANG[lang]["saveas"])
-    preview_status.config(text=LANG[lang]["preview_none"])
+    if preview_state == "none":
+        preview_status.config(text=LANG[lang]["preview_none"])
+    elif preview_state == "loading":
+        preview_status.config(text=LANG[lang]["preview_loading"])
+    elif preview_state == "loaded":
+        preview_status.config(text=LANG[lang]["preview_loaded"])
     menubar.entryconfig(0, label=LANG[lang]["menu"])
     menubar.entryconfig(1, label=LANG[lang]["view"])
     menubar.entryconfig(2, label=LANG[lang]["help"])
@@ -927,6 +957,9 @@ def set_language(lang):
     else:
         darktheme_button.config(text=LANG[lang]["btn_dark"])
 
+    status_txt.config(
+        text=f"{LANG[lang]['status_prefix']}{LANG[lang]['download_completed']}"
+    )
 
 def set_light_entry_style():
     # Light mode entry
@@ -955,7 +988,7 @@ def start_progress(message="Working..."):
     progress_bar.config(mode="indeterminate", bootstyle="primary")
     progress_bar.start(10)
 
-    status_txt.config(text=f"Status: {message}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{message}")
 
     download_button.config(state="disabled", cursor="arrow")
     clean_button.config(state="disabled", cursor="arrow")
@@ -1192,7 +1225,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.1")
+mainwindow.title("OSM2Syntax, v. 1.0.2")
 mainwindow.resizable(False, False)
 mainwindow.iconbitmap("icon.ico")
 
