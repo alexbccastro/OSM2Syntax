@@ -25,6 +25,7 @@ from shapely.geometry import LineString
 ox.settings.overpass_endpoint = "https://overpass.kumi.systems/api/interpreter"
 ox.settings.timeout = 180
 ox.settings.headers = {"User-Agent": "OSM2Syntax/1.0"}
+current_status_key = "status_waiting"
 
 
 # Language System
@@ -37,8 +38,8 @@ LANG = {
         "plot": "Plot",
         "dark": "Dark Mode",
         "light": "Light Mode",
-        "status_waiting": "Status: Waiting",
-        "status_cancel": "Status: Cancelling download...",
+        "status_waiting": "Waiting",
+        "status_cancel": "Cancelling download...",
         "name": "Name (OSM Nominatim)",
         "point": "Point (Decimal Degrees)",
         "radius": "Radius (m)",
@@ -150,8 +151,8 @@ LANG = {
         "clear": "Limpar",
         "preview": "Visualizar",
         "plot": "Salvar",
-        "status_waiting": "Status: Aguardando",
-        "status_cancel": "Status: Cancelando download...",
+        "status_waiting": "Aguardando",
+        "status_cancel": "Cancelando download...",
         "name": "Nome (OSM Nominatim)",
         "point": "Ponto (Graus Decimais)",
         "radius": "Raio (m)",
@@ -457,11 +458,14 @@ def download_data():
 
 def error_progress(message="Error"):
     global progress_state
+    global current_status_key
+    current_status_key = message
+
     progress_state = "danger"
     progress_bar.stop()
     progress_bar.config(mode="determinate", bootstyle="danger")
     progress_bar_var.set(0)
-    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{message}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal")
     mainwindow.after(0, update_preview_button_state)
@@ -476,18 +480,19 @@ def exit_fullscreen(event=None):
 
 def finish_progress(message=None):
     global progress_state
+    global current_status_key
 
     if message is None:
-        message = LANG[current_lang]["download_completed"]
+        message = "download_completed"
+
+    current_status_key = message
 
     progress_state = "success"
     progress_bar.stop()
     progress_bar.config(mode="determinate", bootstyle="success")
     progress_bar_var.set(100)
 
-    status_txt.config(
-        text=f"{LANG[current_lang]['status_prefix']}{message}"
-    )
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
 
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal", cursor="hand2")
@@ -957,9 +962,8 @@ def set_language(lang):
     else:
         darktheme_button.config(text=LANG[lang]["btn_dark"])
 
-    status_txt.config(
-        text=f"{LANG[lang]['status_prefix']}{LANG[lang]['download_completed']}"
-    )
+    status_txt.config(text=f"{LANG[lang]['status_prefix']}{LANG[lang][current_status_key]}")
+
 
 def set_light_entry_style():
     # Light mode entry
@@ -976,10 +980,15 @@ def set_progress(value, message=None):
     progress_bar.config(mode="determinate")
     progress_bar_var.set(value)
     if message:
-        status_txt.config(text=message)
+        global current_status_key
+        current_status_key = message
+
+        status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
 
 
 def start_progress(message="Working..."):
+    global current_status_key
+    current_status_key = message
     cancel_event.clear()
     global progress_state, cancel_download_flag
     cancel_download_flag = False
@@ -988,7 +997,7 @@ def start_progress(message="Working..."):
     progress_bar.config(mode="indeterminate", bootstyle="primary")
     progress_bar.start(10)
 
-    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{message}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
 
     download_button.config(state="disabled", cursor="arrow")
     clean_button.config(state="disabled", cursor="arrow")
