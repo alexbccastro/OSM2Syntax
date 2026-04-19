@@ -122,7 +122,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.2
+        OSM2Syntax v.1.0.3
 
         Road-Center Line Preparation Tool for Space Syntax Analysis
 
@@ -142,7 +142,8 @@ LANG = {
         "preview_saved_title": "Saved",
         "preview_saved_message": "Preview saved successfully!",
         "error_title": "Error",
-        "status_prefix": "Status: "
+        "status_prefix": "Status: ",
+        "rg_doc": "User Guide on ResearchGate"
     },
 
     "pt": {
@@ -235,7 +236,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.2
+        OSM2Syntax v.1.0.3
 
         Ferramenta para preparação de Road-Center Line
         para análise em Sintaxe Espacial
@@ -257,6 +258,7 @@ LANG = {
         "preview_saved_message": "Visualização salva com sucesso!",
         "error_title": "Erro",
         "status_prefix": "Status: ",
+        "rg_doc": "Guia do Usuário no ResearchGate"
     }
 }
 current_lang = "en"
@@ -556,6 +558,10 @@ def open_about():
 
 def open_github():
     webbrowser.open("https://github.com/alexbccastro/OSM2Syntax")
+
+
+def open_researchgate():
+    webbrowser.open("https://www.researchgate.net/")  # substitua pelo link direto do seu trabalho
 
 
 def open_tutorial():
@@ -946,7 +952,8 @@ def set_language(lang):
     view_menu.entryconfig(1, label=LANG[lang]["fullscreen"])
     help_menu.entryconfig(0, label=LANG[lang]["about"])
     help_menu.entryconfig(1, label=LANG[lang]["github"])
-    help_menu.entryconfig(3, label=LANG[lang]["quick_tutorial"])
+    help_menu.entryconfig(4, label=LANG[lang]["quick_tutorial"])
+    help_menu.entryconfig(2, label=LANG[lang]["rg_doc"])
     tooltip_name.text = LANG[lang]["tooltip_name"]
     tooltip_point.text = LANG[lang]["tooltip_point"]
     tooltip_radius.text = LANG[lang]["tooltip_radius"]
@@ -1116,7 +1123,8 @@ def update_menu_language():
 
     help_menu.entryconfig(0, label=lang["about"])
     help_menu.entryconfig(1, label=lang["github"])
-    help_menu.entryconfig(3, label=lang["quick_tutorial"])
+    help_menu.entryconfig(2, label=lang["rg_doc"])
+    help_menu.entryconfig(4, label=lang["quick_tutorial"])
 
 
 def update_logo():
@@ -1234,7 +1242,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.2")
+mainwindow.title("OSM2Syntax, v. 1.0.3")
 mainwindow.resizable(False, False)
 mainwindow.iconbitmap("icon.ico")
 
@@ -1279,6 +1287,7 @@ menubar.add_cascade(label=LANG[current_lang]["view"], menu=view_menu)
 # Help Menu
 help_menu.add_command(label=LANG[current_lang]["about"], command=open_about)
 help_menu.add_command(label=LANG[current_lang]["github"], command=open_github)
+help_menu.add_command(label=LANG[current_lang]["rg_doc"], command=open_researchgate)
 help_menu.add_separator()
 help_menu.add_command(label=LANG[current_lang]["quick_tutorial"], command=open_tutorial)
 menubar.add_cascade(label=LANG[current_lang]["help"], menu=help_menu)

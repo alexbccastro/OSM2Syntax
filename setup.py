@@ -61,8 +61,8 @@ executables = [
 
 setup(
     name="OSM2Syntax",
-    version="1.0.2",
-    description="OSM2Syntax 1.0.2",
+    version="1.0.3",
+    description="OSM2Syntax 1.0.3",
     options={"build_exe": build_exe_options},
     executables=executables
 )
