@@ -467,7 +467,7 @@ def error_progress(message="Error"):
     progress_bar.stop()
     progress_bar.config(mode="determinate", bootstyle="danger")
     progress_bar_var.set(0)
-    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{message}")
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal")
     mainwindow.after(0, update_preview_button_state)
@@ -494,7 +494,7 @@ def finish_progress(message=None):
     progress_bar.config(mode="determinate", bootstyle="success")
     progress_bar_var.set(100)
 
-    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang].get(message, message)}")
 
     download_button.config(state="normal", cursor="hand2")
     darktheme_button.config(state="normal", cursor="hand2")
@@ -561,7 +561,7 @@ def open_github():
 
 
 def open_researchgate():
-    webbrowser.open("https://www.researchgate.net/")  # substitua pelo link direto do seu trabalho
+    webbrowser.open("https://www.researchgate.net/publication/403982918_OSM2Syntax_User_Guide_Guia_do_Usuario")
 
 
 def open_tutorial():
@@ -586,7 +586,7 @@ def run_download():
 
     try:
         start_time = time.time()
-        mainwindow.after(0, lambda: start_progress(LANG[current_lang]["status_connecting"]))
+        mainwindow.after(0, lambda: start_progress("status_connecting"))
 
         custom_filter = ('["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|'
                          'secondary_link|tertiary|tertiary_link|residential|living_street|unclassified|road|'
@@ -624,7 +624,7 @@ def run_download():
             filename_base = make_safe_filename(f"rcl_{coord_part}_r{int(radius)}")
 
         # -------------------------
-        mainwindow.after(0, lambda: set_progress(30, LANG[current_lang]["status_processing"]))
+        mainwindow.after(0, lambda: set_progress(30, "status_processing"))
 
         g = g.to_undirected()
         check_cancel()
@@ -642,7 +642,7 @@ def run_download():
         total_length_before = edges.length.sum()
 
         # RCL Simplification
-        mainwindow.after(0, lambda: set_progress(50, LANG[current_lang]["status_simplifying"]))
+        mainwindow.after(0, lambda: set_progress(50, "status_simplifying"))
 
         if simplify_flag:
 
@@ -697,7 +697,7 @@ def run_download():
             filename_base += "_original"
 
         # -------------------------
-        mainwindow.after(0, lambda: set_progress(75, LANG[current_lang]["status_saving"]))
+        mainwindow.after(0, lambda: set_progress(75, "status_saving"))
 
         folder = saveas_entry_var.get()
         base_path = os.path.join(folder, filename_base)
@@ -735,7 +735,7 @@ def run_download():
 
         if nature_var.get():
 
-            vegetation_tags = {"natural": True}
+            vegetation_tags = {"natural": ["grassland", "heath", "scrub", "shrubbery", "tundra", "wood", "wetland"]}
 
             if name_checkbutton_var.get():
                 gdf_veg = ox.features_from_place(place, vegetation_tags)
@@ -751,7 +751,7 @@ def run_download():
 
         if park_var.get():
 
-            park_tags = {"leisure": ["park", "dog_park"]}
+            park_tags = {"leisure": ["park", "dog_park"], "natural": ["tree", "tree_row"]}
 
             if name_checkbutton_var.get():
                 gdf_park = ox.features_from_place(place, park_tags)
@@ -990,7 +990,7 @@ def set_progress(value, message=None):
         global current_status_key
         current_status_key = message
 
-        status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
+        status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang].get(message, message)}")
 
 
 def start_progress(message="Working..."):
@@ -1004,7 +1004,7 @@ def start_progress(message="Working..."):
     progress_bar.config(mode="indeterminate", bootstyle="primary")
     progress_bar.start(10)
 
-    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang][message]}")
+    status_txt.config(text=f"{LANG[current_lang]['status_prefix']}{LANG[current_lang].get(message, message)}")
 
     download_button.config(state="disabled", cursor="arrow")
     clean_button.config(state="disabled", cursor="arrow")
