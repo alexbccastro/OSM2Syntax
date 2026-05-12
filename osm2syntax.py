@@ -8,6 +8,7 @@ import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox
 from ctypes import windll
+from shapely.geometry import LineString
 import sys
 
 # Third-Party Libraries
@@ -122,7 +123,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.3
+        OSM2Syntax v.1.0.4
 
         Road-Center Line Preparation Tool for Space Syntax Analysis
 
@@ -236,7 +237,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.3
+        OSM2Syntax v.1.0.4
 
         Ferramenta para preparação de Road-Center Line
         para análise em Sintaxe Espacial
@@ -394,6 +395,16 @@ def choose_directory():
     check_download_ready()
 
 
+def clean_nodes_from_edges(nodes, edges):
+    used_nodes = set(edges.index.get_level_values(0)).union(
+        set(edges.index.get_level_values(1))
+    )
+
+    return nodes.loc[
+        nodes.index.intersection(used_nodes)
+    ].copy()
+
+
 def clear_all():
     global preview_state
     preview_state = "none"
@@ -441,6 +452,25 @@ def clear_all():
     preview_status.config(text=LANG[current_lang]["preview_none"])
     preview_button.config(state="disabled", cursor="arrow")
     save_preview_button.config(state="disabled", cursor="arrow")
+
+
+def clean_line_edges(edges, min_length=0.5):
+    edges = edges.copy()
+
+    edges = edges[
+        edges.geometry.notna()
+        & ~edges.geometry.is_empty
+        & edges.geometry.is_valid
+        & (edges.geometry.length > min_length)
+    ].copy()
+
+    edges = edges[
+        edges.geometry.apply(
+            lambda geom: isinstance(geom, LineString)
+        )
+    ].copy()
+
+    return edges
 
 
 def create_custom_button_styles():
@@ -543,6 +573,17 @@ def make_safe_filename(text, max_length=80):
     return safe
 
 
+def normalized_line_key(geom, precision=3):
+    coords = [
+        (round(x, precision), round(y, precision))
+        for x, y in geom.coords
+    ]
+
+    reversed_coords = list(reversed(coords))
+
+    return tuple(min(coords, reversed_coords))
+
+
 def open_about():
     about_window = tb.Toplevel(mainwindow)
     about_window.title(LANG[current_lang]["about"])
@@ -581,6 +622,20 @@ def preview_data():
     threading.Thread(target=run_preview, daemon=True).start()
 
 
+def remove_duplicate_edges(edges, precision=3):
+    edges = edges.copy()
+
+    edges["geom_key"] = edges.geometry.apply(
+        lambda geom: normalized_line_key(geom, precision)
+    )
+
+    edges = edges.drop_duplicates(
+        subset="geom_key"
+    ).drop(columns="geom_key")
+
+    return edges
+
+
 def run_download():
     cancel_event.clear()
 
@@ -597,13 +652,20 @@ def run_download():
 
         # Define Place
         if name_checkbutton_var.get():
+
             place = name_entry.get().strip()
+
             if not place:
                 raise ValueError(LANG[current_lang]["empty_name"])
 
             location_info = place
 
-            g = ox.graph_from_place(place, custom_filter=custom_filter, simplify=simplify_flag)
+            g = ox.graph_from_place(
+                place,
+                custom_filter=custom_filter,
+                simplify=simplify_flag
+            )
+
             check_cancel()
 
             safe_place = make_safe_filename(place)
@@ -616,14 +678,21 @@ def run_download():
 
             location_info = f"Lat: {lat}, Lon: {lon}, Radius: {radius}m"
 
-            g = ox.graph_from_point((lat, lon), dist=radius, custom_filter=custom_filter,
-                                    simplify=simplify_flag)
+            g = ox.graph_from_point(
+                (lat, lon),
+                dist=radius,
+                custom_filter=custom_filter,
+                simplify=simplify_flag
+            )
+
             check_cancel()
 
             coord_part = f"{lat:.5f}_{lon:.5f}".replace("-", "").replace(".", "p")
-            filename_base = make_safe_filename(f"rcl_{coord_part}_r{int(radius)}")
+            filename_base = make_safe_filename(
+                f"rcl_{coord_part}_r{int(radius)}"
+            )
 
-        # -------------------------
+        # ---------------------------------------------------
         mainwindow.after(0, lambda: set_progress(30, "status_processing"))
 
         g = g.to_undirected()
@@ -631,17 +700,30 @@ def run_download():
 
         largest_cc = max(nx.connected_components(g), key=len)
         g = g.subgraph(largest_cc).copy()
+
         check_cancel()
 
         g_proj = ox.project_graph(g)
+
         nodes, edges = ox.graph_to_gdfs(g_proj)
+
+        check_cancel()
+
+        # GEOMETRY CLEANING BEFORE METRICS
+        edges = clean_line_edges(edges, min_length=0.5)
+        edges = remove_duplicate_edges(edges, precision=3)
+        nodes = clean_nodes_from_edges(nodes, edges)
+
         check_cancel()
 
         # Metrics Before
-        total_vertices_before = edges.geometry.apply(lambda g: len(g.coords)).sum()
+        total_vertices_before = edges.geometry.apply(
+            lambda g: len(g.coords)
+        ).sum()
+
         total_length_before = edges.length.sum()
 
-        # RCL Simplification
+        # ---------------------------------------------------
         mainwindow.after(0, lambda: set_progress(50, "status_simplifying"))
 
         if simplify_flag:
@@ -652,69 +734,148 @@ def run_download():
             def calculate_angle(a, b, c):
                 ba = np.array(a) - np.array(b)
                 bc = np.array(c) - np.array(b)
-                cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
-                return np.degrees(np.arccos(np.clip(cosine_angle, -1.0, 1.0)))
+
+                cosine_angle = np.dot(ba, bc) / (
+                    np.linalg.norm(ba) * np.linalg.norm(bc)
+                )
+
+                return np.degrees(
+                    np.arccos(
+                        np.clip(cosine_angle, -1.0, 1.0)
+                    )
+                )
 
             def simplify_line(line):
                 coords = list(line.coords)
+
                 if len(coords) <= 2:
                     return line
 
                 preserved = [coords[0]]
+
                 for i in range(1, len(coords) - 1):
 
                     if cancel_event.is_set():
-                        raise RuntimeError(LANG[current_lang]["cancelled"])
+                        raise RuntimeError(
+                            LANG[current_lang]["cancelled"]
+                        )
 
-                    angle = calculate_angle(coords[i - 1], coords[i], coords[i + 1])
+                    angle = calculate_angle(
+                        coords[i - 1],
+                        coords[i],
+                        coords[i + 1]
+                    )
+
                     if angle > angle_threshold:
                         preserved.append(coords[i])
 
                 preserved.append(coords[-1])
-                return LineString(preserved).simplify(tolerance, preserve_topology=False)
 
-            edges["geometry"] = edges.geometry.apply(simplify_line)
+                return LineString(preserved).simplify(
+                    tolerance,
+                    preserve_topology=False
+                )
+
+            edges["geometry"] = edges.geometry.apply(
+                simplify_line
+            )
+
             check_cancel()
 
-            total_vertices_after = edges.geometry.apply(lambda g: len(g.coords)).sum()
+            # GEOMETRY CLEANING AFTER SIMPLIFICATION
+            edges = clean_line_edges(edges, min_length=0.5)
+
+            edges = remove_duplicate_edges(
+                edges,
+                precision=3
+            )
+
+            nodes = clean_nodes_from_edges(
+                nodes,
+                edges
+            )
+
+            check_cancel()
+
+            total_vertices_after = edges.geometry.apply(
+                lambda g: len(g.coords)
+            ).sum()
+
             total_length_after = edges.length.sum()
 
-            vertex_reduction = ((total_vertices_before - total_vertices_after) /
-                                total_vertices_before * 100)
+            vertex_reduction = (
+                (total_vertices_before - total_vertices_after)
+                / total_vertices_before * 100
+            )
 
-            length_variation = ((total_length_after - total_length_before) /
-                                total_length_before * 100)
+            length_variation = (
+                (total_length_after - total_length_before)
+                / total_length_before * 100
+            )
 
-            filename_base += f"_AT{int(angle_threshold)}_TO{int(tolerance)}"
+            filename_base += (
+                f"_AT{int(angle_threshold)}_TO{int(tolerance)}"
+            )
 
         else:
             angle_threshold = "-"
             tolerance = "-"
+
             total_vertices_after = total_vertices_before
             total_length_after = total_length_before
+
             vertex_reduction = 0
             length_variation = 0
+
             filename_base += "_original"
 
-        # -------------------------
+        # ---------------------------------------------------
         mainwindow.after(0, lambda: set_progress(75, "status_saving"))
 
         folder = saveas_entry_var.get()
+
         base_path = os.path.join(folder, filename_base)
+
         filepath_network = base_path + ".gpkg"
 
         counter = 1
+
         while os.path.exists(filepath_network):
             filepath_network = f"{base_path}_v{counter}.gpkg"
             counter += 1
 
-        edges.to_file(filepath_network, layer="edges", driver="GPKG")
+        # FINAL CLEANING BEFORE EXPORT
+        edges = clean_line_edges(edges, min_length=0.5)
+
+        edges = remove_duplicate_edges(
+            edges,
+            precision=3
+        )
+
+        nodes = clean_nodes_from_edges(
+            nodes,
+            edges
+        )
+
         check_cancel()
 
-        nodes.to_file(filepath_network, layer="nodes", driver="GPKG")
+        edges.to_file(
+            filepath_network,
+            layer="edges",
+            driver="GPKG"
+        )
+
         check_cancel()
 
-        # Background Leyers Download
+        nodes.to_file(
+            filepath_network,
+            layer="nodes",
+            driver="GPKG"
+        )
+
+        check_cancel()
+
+        # Background Layers Download
         background_files = []
 
         if buildings_var.get():
@@ -722,67 +883,135 @@ def run_download():
             buildings_tags = {"building": True}
 
             if name_checkbutton_var.get():
-                gdf_buildings = ox.features_from_place(place, buildings_tags)
+                gdf_buildings = ox.features_from_place(
+                    place,
+                    buildings_tags
+                )
             else:
-                gdf_buildings = ox.features_from_point((lat, lon), buildings_tags, dist=radius)
+                gdf_buildings = ox.features_from_point(
+                    (lat, lon),
+                    buildings_tags,
+                    dist=radius
+                )
 
             if not gdf_buildings.empty:
                 buildings_path = base_path + "_buildings.gpkg"
-                gdf_buildings.to_file(buildings_path, driver="GPKG")
+
+                gdf_buildings.to_file(
+                    buildings_path,
+                    driver="GPKG"
+                )
+
                 background_files.append("Buildings")
 
         check_cancel()
 
         if nature_var.get():
 
-            vegetation_tags = {"natural": ["grassland", "heath", "scrub", "shrubbery", "tundra", "wood", "wetland"]}
+            vegetation_tags = {
+                "natural": [
+                    "grassland",
+                    "heath",
+                    "scrub",
+                    "shrubbery",
+                    "tundra",
+                    "wood",
+                    "wetland"
+                ]
+            }
 
             if name_checkbutton_var.get():
-                gdf_veg = ox.features_from_place(place, vegetation_tags)
+                gdf_veg = ox.features_from_place(
+                    place,
+                    vegetation_tags
+                )
             else:
-                gdf_veg = ox.features_from_point((lat, lon), vegetation_tags, dist=radius)
+                gdf_veg = ox.features_from_point(
+                    (lat, lon),
+                    vegetation_tags,
+                    dist=radius
+                )
 
             if not gdf_veg.empty:
                 veg_path = base_path + "_vegetation.gpkg"
-                gdf_veg.to_file(veg_path, driver="GPKG")
+
+                gdf_veg.to_file(
+                    veg_path,
+                    driver="GPKG"
+                )
+
                 background_files.append("Vegetation")
 
         check_cancel()
 
         if park_var.get():
 
-            park_tags = {"leisure": ["park", "dog_park"], "natural": ["tree", "tree_row"]}
+            park_tags = {
+                "leisure": ["park", "dog_park"],
+                "natural": ["tree", "tree_row"]
+            }
 
             if name_checkbutton_var.get():
-                gdf_park = ox.features_from_place(place, park_tags)
+                gdf_park = ox.features_from_place(
+                    place,
+                    park_tags
+                )
             else:
-                gdf_park = ox.features_from_point((lat, lon), park_tags, dist=radius)
+                gdf_park = ox.features_from_point(
+                    (lat, lon),
+                    park_tags,
+                    dist=radius
+                )
 
             if not gdf_park.empty:
                 park_path = base_path + "_park.gpkg"
-                gdf_park.to_file(park_path, driver="GPKG")
+
+                gdf_park.to_file(
+                    park_path,
+                    driver="GPKG"
+                )
+
                 background_files.append("Park")
 
         check_cancel()
 
         if water_var.get():
 
-            water_tags = {"natural": ["water"], "waterway": True}
+            water_tags = {
+                "natural": ["water"],
+                "waterway": True
+            }
 
             if name_checkbutton_var.get():
-                gdf_water = ox.features_from_place(place, water_tags)
+                gdf_water = ox.features_from_place(
+                    place,
+                    water_tags
+                )
             else:
-                gdf_water = ox.features_from_point((lat, lon), water_tags, dist=radius)
+                gdf_water = ox.features_from_point(
+                    (lat, lon),
+                    water_tags,
+                    dist=radius
+                )
 
             if not gdf_water.empty:
                 water_path = base_path + "_water.gpkg"
-                gdf_water.to_file(water_path, driver="GPKG")
+
+                gdf_water.to_file(
+                    water_path,
+                    driver="GPKG"
+                )
+
                 background_files.append("Water")
 
         check_cancel()
 
         # Report Generation
-        file_size_mb = os.path.getsize(filepath_network) / (1024 * 1024)
+        file_size_mb = (
+            os.path.getsize(filepath_network)
+            / (1024 * 1024)
+        )
+
         end_time = time.time()
         download_time = end_time - start_time
 
@@ -823,22 +1052,46 @@ def run_download():
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_text)
 
-        lang = LANG[current_lang]
-
         mainwindow.after(0, lambda: finish_progress())
-        mainwindow.after(0, lambda: messagebox.showinfo(LANG[current_lang]["download_completed_title"],
-                                                        f"{LANG[current_lang]['download_completed']}\n\n"
-                                                        f"{LANG[current_lang]['download_time']}: {download_time:.2f} {lang['seconds']}\n\n"))
+
+        mainwindow.after(
+            0,
+            lambda: messagebox.showinfo(
+                LANG[current_lang]["download_completed_title"],
+                f"{LANG[current_lang]['download_completed']}\n\n"
+                f"{LANG[current_lang]['download_time']}: "
+                f"{download_time:.2f} {lang['seconds']}\n\n"
+            )
+        )
 
     except RuntimeError as e:
+
         if str(e) == LANG[current_lang]["cancelled"]:
-            mainwindow.after(0, lambda: error_progress(LANG[current_lang]["download_cancelled"]))
+            mainwindow.after(
+                0,
+                lambda: error_progress(
+                    LANG[current_lang]["download_cancelled"]
+                )
+            )
+
             return
 
     except Exception as e:
+
         error_message = str(e)
-        mainwindow.after(0, lambda: error_progress(error_message))
-        mainwindow.after(0, lambda: messagebox.showerror(LANG[current_lang]["empty_name"], error_message))
+
+        mainwindow.after(
+            0,
+            lambda: error_progress(error_message)
+        )
+
+        mainwindow.after(
+            0,
+            lambda: messagebox.showerror(
+                LANG[current_lang]["empty_name"],
+                error_message
+            )
+        )
 
 
 def run_preview():
@@ -1242,7 +1495,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.3")
+mainwindow.title("OSM2Syntax, v. 1.0.4")
 mainwindow.resizable(False, False)
 mainwindow.iconbitmap("icon.ico")
 
