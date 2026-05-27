@@ -51,12 +51,20 @@ if sys.platform == "win32":
     base = "gui"
 
 executables = [
+]
+
+# Ajusta nome do executável e ícone conforme plataforma
+target_name = "OSM2Syntax.exe" if sys.platform == "win32" else "OSM2Syntax"
+icon_arg = {"icon": "icon.ico"} if sys.platform == "win32" else {}
+
+executables = [
     Executable(
-        "osm2syntax.py",  # seu script principal
+        "osm2syntax.py",
         base=base,
-        icon="icon.ico",
-        target_name="OSM2Syntax.exe"
+        target_name=target_name,
+        **icon_arg
     )
+]
 ]
 
 setup(

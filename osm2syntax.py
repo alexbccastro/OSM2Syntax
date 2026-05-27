@@ -7,9 +7,43 @@ import unicodedata
 import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox
-from ctypes import windll
 from shapely.geometry import LineString
 import sys
+
+try:
+    from ctypes import windll
+except Exception:
+    windll = None
+
+# Base path para recursos (suporta execução frozen e execução direta)
+if getattr(sys, 'frozen', False):
+    BASE_PATH = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+else:
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+
+def set_window_icon(win):
+    """Set window icon in a cross-platform way.
+
+    On Windows use .ico with iconbitmap; on other platforms try iconphoto with a PNG logo if available.
+    """
+    try:
+        if sys.platform == "win32":
+            ico_path = os.path.join(BASE_PATH, "icon.ico")
+            if os.path.exists(ico_path):
+                win.iconbitmap(ico_path)
+                return
+
+        # Fallback: try to set a PNG as iconphoto (common on Linux)
+        png_path = os.path.join(BASE_PATH, "logo_txt_black.png")
+        if os.path.exists(png_path):
+            try:
+                img = tk.PhotoImage(file=png_path)
+                win.iconphoto(False, img)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 # Third-Party Libraries
 import matplotlib.pyplot as plt
@@ -535,21 +569,27 @@ def finish_progress(message=None):
 
 
 def load_custom_font():
+    # On Windows register fonts to system using AddFontResourceExW.
+    # On other platforms, fonts placed in `fonts/` will be referenced by PIL/matplotlib when needed.
+    if windll is None:
+        return
+
     FR_PRIVATE = 0x10
 
-    if getattr(sys, 'frozen', False):
-        base_path = os.path.dirname(sys.executable)
-    else:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-
-    font_path_regular = os.path.join(base_path, "fonts", "IBMPlexSans-Regular.ttf")
-    font_path_medium = os.path.join(base_path, "fonts", "IBMPlexSans-Medium.ttf")
+    font_path_regular = os.path.join(BASE_PATH, "fonts", "IBMPlexSans-Regular.ttf")
+    font_path_medium = os.path.join(BASE_PATH, "fonts", "IBMPlexSans-Medium.ttf")
 
     if os.path.exists(font_path_regular):
-        windll.gdi32.AddFontResourceExW(font_path_regular, FR_PRIVATE, 0)
+        try:
+            windll.gdi32.AddFontResourceExW(font_path_regular, FR_PRIVATE, 0)
+        except Exception:
+            pass
 
     if os.path.exists(font_path_medium):
-        windll.gdi32.AddFontResourceExW(font_path_medium, FR_PRIVATE, 0)
+        try:
+            windll.gdi32.AddFontResourceExW(font_path_medium, FR_PRIVATE, 0)
+        except Exception:
+            pass
 
 
 def make_safe_filename(text, max_length=80):
@@ -589,7 +629,7 @@ def open_about():
     about_window.title(LANG[current_lang]["about"])
     about_window.geometry("420x220")
     about_window.resizable(False, False)
-    about_window.iconbitmap("icon.ico")
+    set_window_icon(about_window)
 
     text = tk.Text(about_window, wrap="word", padx=25, pady=25, font=("IBM Plex Sans", 10), width=50, height=8)
     text.insert("1.0", LANG[current_lang]["about_text"])
@@ -610,7 +650,7 @@ def open_tutorial():
     tutorial_window.title(LANG[current_lang]["quick_tutorial"])
     tutorial_window.geometry("695x350")
     tutorial_window.resizable(False, False)
-    tutorial_window.iconbitmap("icon.ico")
+    set_window_icon(tutorial_window)
 
     text = tk.Text(tutorial_window, wrap="word", padx=20, pady=20, font=("IBM Plex Sans", 10), width=85, )
     text.insert("1.0", LANG[current_lang]["tutorial_text"])
@@ -1497,7 +1537,7 @@ class ToolTip:
 mainwindow = tb.Window(themename="flatly")
 mainwindow.title("OSM2Syntax, v. 1.0.4")
 mainwindow.resizable(False, False)
-mainwindow.iconbitmap("icon.ico")
+set_window_icon(mainwindow)
 
 # Main Layout (Left + Right)
 main_container = tb.Frame(mainwindow)
@@ -1567,27 +1607,27 @@ style.map("Modern.TEntry", fieldbackground=[("disabled", "#E9ECEF")], foreground
 dark_mode_var = tk.BooleanVar(value=False)
 
 # Images
-clear_img = Image.open("icon_clear.png").resize((18, 18))
+clear_img = Image.open(os.path.join(BASE_PATH, "icon_clear.png")).resize((18, 18))
 clear_icon = ImageTk.PhotoImage(clear_img)
-download_img = Image.open("icon_download.png").resize((18, 18))
+download_img = Image.open(os.path.join(BASE_PATH, "icon_download.png")).resize((18, 18))
 download_icon = ImageTk.PhotoImage(download_img)
-sun_img = Image.open("icon_sun.png").resize((20, 20))
+sun_img = Image.open(os.path.join(BASE_PATH, "icon_sun.png")).resize((20, 20))
 sun_icon = ImageTk.PhotoImage(sun_img)
-moon_img = Image.open("icon_moon.png").resize((20, 20))
+moon_img = Image.open(os.path.join(BASE_PATH, "icon_moon.png")).resize((20, 20))
 moon_icon = ImageTk.PhotoImage(moon_img)
-preview_img = Image.open("icon_preview.png").resize((22, 22))
+preview_img = Image.open(os.path.join(BASE_PATH, "icon_preview.png")).resize((22, 22))
 preview_icon = ImageTk.PhotoImage(preview_img)
-save_preview_img = Image.open("icon_savepreview.png").resize((22, 22))
+save_preview_img = Image.open(os.path.join(BASE_PATH, "icon_savepreview.png")).resize((22, 22))
 save_preview_icon = ImageTk.PhotoImage(save_preview_img)
-cancel_img = Image.open("icon_cancel.png").resize((18, 18))
+cancel_img = Image.open(os.path.join(BASE_PATH, "icon_cancel.png")).resize((18, 18))
 cancel_icon = ImageTk.PhotoImage(cancel_img)
-flag_br_img = Image.open("icon_br.png").resize((18, 18))
+flag_br_img = Image.open(os.path.join(BASE_PATH, "icon_br.png")).resize((18, 18))
 flag_br_icon = ImageTk.PhotoImage(flag_br_img)
-flag_uk_img = Image.open("icon_uk.png").resize((18, 18))
+flag_uk_img = Image.open(os.path.join(BASE_PATH, "icon_uk.png")).resize((18, 18))
 flag_uk_icon = ImageTk.PhotoImage(flag_uk_img)
-logo_light_img = Image.open("logo_txt_black.png")
+logo_light_img = Image.open(os.path.join(BASE_PATH, "logo_txt_black.png"))
 logo_light = ImageTk.PhotoImage(logo_light_img)
-logo_dark_img = Image.open("logo_txt_white.png")
+logo_dark_img = Image.open(os.path.join(BASE_PATH, "logo_txt_white.png"))
 logo_dark = ImageTk.PhotoImage(logo_dark_img)
 
 # Header frame

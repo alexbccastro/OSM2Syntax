@@ -1,3 +1,82 @@
+# OSM2Syntax — Build e Teste em Linux
+
+Este repositório contém o aplicativo OSM2Syntax (originalmente com build para Windows). Aqui estão os passos para gerar e testar um build Linux usando um ambiente virtual.
+
+Pré-requisitos
+- Python 3.8+ instalado
+- `git` (opcional)
+- em SSH headless, instale `xvfb` para testes GUI: `sudo apt install xvfb`
+
+Passos para criar o build (recomendado)
+
+1. Criar virtualenv e ativar
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+```
+
+2. Instalar dependências
+
+```bash
+python -m pip install -r requirements.txt pyinstaller
+```
+
+3. Gerar o executável (script preparado)
+
+```bash
+./build_linux.sh
+```
+
+O executável gerado ficará em `dist/osm2syntax`.
+
+Comandos alternativos (mais verbosos)
+
+```bash
+.venv/bin/pyinstaller --noconfirm --onefile --windowed \
+  --hidden-import PIL._tkinter_finder --hidden-import PIL.ImageTk \
+  --add-data "fonts:fonts" --add-data "icon_clear.png:." --add-data "icon_download.png:." \
+  --add-data "logo_txt_black.png:." --add-data "logo_txt_white.png:." --add-data "icon_sun.png:." \
+  --add-data "icon_moon.png:." --add-data "icon_preview.png:." --add-data "icon_savepreview.png:." \
+  --add-data "icon_cancel.png:." --add-data "icon_br.png:." --add-data "icon_uk.png:." --add-data "icon.ico:." \
+  --copy-metadata osmnx --copy-metadata geopandas --copy-metadata pandas --copy-metadata shapely \
+  --copy-metadata pyproj --copy-metadata pyogrio \
+  osm2syntax.py
+```
+
+Testes (GUI)
+- Com display local: `./dist/osm2syntax`
+- Em SSH sem DISPLAY: instale `xvfb` e rode:
+
+```bash
+sudo apt install xvfb
+xvfb-run -s "-screen 0 1024x768x24" ./dist/osm2syntax
+```
+
+Depuração (mais direta)
+- Rodar o script com o Python do venv expõe tracebacks completos:
+
+```bash
+. .venv/bin/activate
+xvfb-run -s "-screen 0 1024x768x24" .venv/bin/python osm2syntax.py
+```
+
+Erros comuns e correções rápidas
+- `No package metadata was found for ...`: adicionar `--copy-metadata <package>` ao PyInstaller.
+- `FileNotFoundError` para ícones/fonts: garantir `--add-data` e que `osm2syntax.py` usa `sys._MEIPASS` quando frozen (já ajustado).
+- PIL/ImageTk ModuleNotFoundError: passar `--hidden-import PIL._tkinter_finder --hidden-import PIL.ImageTk`.
+- Sem `$DISPLAY`: usar `xvfb-run`.
+
+Commit sugerido
+
+```bash
+git add setup.py osm2syntax.py requirements.txt build_linux.sh .gitignore README.md
+git commit -m "Add Linux build support: PyInstaller script, cross-platform resources and docs"
+git push
+```
+
+Se quiser, eu também posso criar um pacote `.deb` ou um `AppImage` posteriormente. Se testar e encontrar erros, copie/cole a saída do terminal aqui e eu ajudo a depurar.
 # OSM2Syntax
 
 **Road-Center Line Preparation Tool for Space Syntax Analysis**
