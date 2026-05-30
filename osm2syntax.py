@@ -7,7 +7,6 @@ import unicodedata
 import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox
-from ctypes import windll
 import sys
 
 try:
