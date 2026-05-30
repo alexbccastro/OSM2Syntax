@@ -119,6 +119,10 @@ Main libraries used in this project:
 - networkx
 - numpy
 - osmnx
+- geopandas
+- pandas
+- pyogrio
+- pyproj
 - ttkbootstrap
 - pillow
 - shapely

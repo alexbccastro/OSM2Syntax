@@ -14,13 +14,12 @@ then
 fi
 
 python3 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt -r requirements-dev.txt
 
 # Include fonts and key images in the bundle
 PYINSTALLER=.venv/bin/pyinstaller
 
-$PYINSTALLER --noconfirm --onefile --windowed \
+$PYINSTALLER --noconfirm --clean --onefile --windowed \
   --add-data "fonts:fonts" \
   --add-data "icon_clear.png:." \
   --add-data "icon_download.png:." \
@@ -34,7 +33,14 @@ $PYINSTALLER --noconfirm --onefile --windowed \
   --add-data "icon_br.png:." \
   --add-data "icon_uk.png:." \
   --add-data "icon.ico:." \
+  --collect-binaries pyogrio \
+  --collect-data pyogrio \
   --hidden-import "PIL._tkinter_finder" \
+  --hidden-import "pyogrio._err" \
+  --hidden-import "pyogrio._geometry" \
+  --hidden-import "pyogrio._io" \
+  --hidden-import "pyogrio._ogr" \
+  --hidden-import "pyogrio._vsi" \
   --copy-metadata osmnx \
   --copy-metadata geopandas \
   --copy-metadata pandas \
