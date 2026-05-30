@@ -7,7 +7,7 @@ import unicodedata
 import webbrowser
 from datetime import datetime
 from tkinter import filedialog, messagebox
-from shapely.geometry import LineString
+from ctypes import windll
 import sys
 
 try:
@@ -50,6 +50,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import osmnx as ox
+import geopandas as gpd
 import ttkbootstrap as tb
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -77,6 +78,7 @@ LANG = {
         "status_cancel": "Cancelling download...",
         "name": "Name (OSM Nominatim)",
         "point": "Point (Decimal Degrees)",
+        "mask": "Mask Layer",
         "radius": "Radius (m)",
         "simplify": "Simplify RCL",
         "angular_threshold": "Angle Threshold",
@@ -93,7 +95,8 @@ LANG = {
         "error_long": "Longitude must be between -180 and 180.",
         "error_rad": "Radius must be greater than zero.",
         "error_coord_query": "Invalid coordinate query.",
-        "error_name_point": "Select Name or Point.",
+        "error_name_point": "Select Name, Point or Mask Layer.",
+        "error_mask": "Select a valid mask layer file.",
         "cancelled": "CANCELLED",
         "report_title": "OSM2Syntax – Download Report",
         "date": "Date",
@@ -157,7 +160,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.4
+        OSM2Syntax v.1.1.0
 
         Road-Center Line Preparation Tool for Space Syntax Analysis
 
@@ -169,6 +172,7 @@ LANG = {
         """,
         "tooltip_name": "Insert a valid name according to OSM Nominatim (e.g.: 'João Pessoa, Brazil')",
         "tooltip_point": "Insert latitude and longitude in decimal degrees (e.g.: -15.7939869, -47.8828000)",
+        "tooltip_mask": "Select a vector layer (SHP, GPKG, GeoJSON, KML etc.) to use as the download boundary.",
         "tooltip_radius": "Data coverage radius (in meters) from the specified point coordinates.",
         "tooltip_simplify": "Removes redundant nodes to create a cleaner and lighter network structure.",
         "tooltip_angle": "Defines the angular limit (degrees) below which adjacent segments are considered aligned.",
@@ -191,6 +195,7 @@ LANG = {
         "status_cancel": "Cancelando download...",
         "name": "Nome (OSM Nominatim)",
         "point": "Ponto (Graus Decimais)",
+        "mask": "Camada Máscara",
         "radius": "Raio (m)",
         "simplify": "Simplificar RCL",
         "angular_threshold": "Limiar Angular",
@@ -207,7 +212,8 @@ LANG = {
         "error_long": "Valor de Longitude deve ser entre -180 e 180.",
         "error_rad": "Raio deve ser maior que zero.",
         "error_coord_query": "Consulta de coordenada inválida.",
-        "error_name_point": "Selecione Nome ou Ponto.",
+        "error_name_point": "Selecione Nome, Ponto ou Camada Máscara.",
+        "error_mask": "Selecione um arquivo válido de camada máscara.",
         "cancelled": "CANCELADO",
         "report_title": "OSM2Syntax – Relatório de Download",
         "date": "Data",
@@ -271,7 +277,7 @@ LANG = {
 
         """,
         "about_text": """
-        OSM2Syntax v.1.0.4
+        OSM2Syntax v.1.1.0
 
         Ferramenta para preparação de Road-Center Line
         para análise em Sintaxe Espacial
@@ -284,6 +290,7 @@ LANG = {
         """,
         "tooltip_name": "Insira um nome válido de acordo com o OSM Nominatim (ex.: 'João Pessoa, Brasil')",
         "tooltip_point": "Insira latitude e longitude em graus decimais (ex.: -15.7939869, -47.8828000)",
+        "tooltip_mask": "Selecione uma camada vetorial (SHP, GPKG, GeoJSON, KML etc.) para usar como limite do download.",
         "tooltip_radius": "Raio de cobertura dos dados (em metros) a partir do ponto informado.",
         "tooltip_simplify": "Remove nós redundantes para criar uma rede mais limpa e leve.",
         "tooltip_angle": "Define o limite angular (graus) abaixo do qual segmentos adjacentes são considerados alinhados.",
@@ -348,6 +355,11 @@ def build_graph():
         except Exception:
             raise ValueError(LANG[current_lang]["error_coord_query"])
 
+    # Graph by mask layer
+    elif mask_checkbutton_var.get():
+        polygon = get_mask_polygon()
+        g = ox.graph_from_polygon(polygon, custom_filter=custom_filter, simplify=simplify_flag)
+
     else:
         raise ValueError(LANG[current_lang]["error_name_point"])
 
@@ -387,6 +399,11 @@ def build_graph_preview():
         except Exception:
             raise ValueError(LANG[current_lang]["error_coord_query"])
 
+    # Graph preview by mask layer
+    elif mask_checkbutton_var.get():
+        polygon = get_mask_polygon()
+        g = ox.graph_from_polygon(polygon, custom_filter=custom_filter, simplify=True)
+
     else:
         raise ValueError(LANG[current_lang]["error_name_point"])
 
@@ -396,6 +413,21 @@ def build_graph_preview():
     g = ox.project_graph(g)
     return g
 
+
+
+def center_window(window):
+    window.update_idletasks()
+
+    width = window.winfo_width()
+    height = window.winfo_height()
+
+    screen_width = window.winfo_screenwidth()
+    screen_height = window.winfo_screenheight()
+
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+
+    window.geometry(f"+{x}+{y}")
 
 def check_cancel():
     if cancel_event.is_set():
@@ -408,7 +440,11 @@ def cancel_download():
 
 
 def check_download_ready():
-    location_selected = name_checkbutton_var.get() or point_checkbutton_var.get()
+    location_selected = (
+        name_checkbutton_var.get()
+        or point_checkbutton_var.get()
+        or (mask_checkbutton_var.get() and bool(mask_entry_var.get().strip()))
+    )
     directory_selected = bool(saveas_entry_var.get())
 
     if location_selected and directory_selected:
@@ -418,6 +454,13 @@ def check_download_ready():
 
     if location_selected:
         preview_button.config(state="normal", cursor="hand2")
+    elif mask_checkbutton_var.get():
+
+        if mask_entry_var.get().strip():
+            preview_button.config(state="normal", cursor="hand2")
+        else:
+            preview_button.config(state="disabled", cursor="arrow")
+
     else:
         preview_button.config(state="disabled", cursor="arrow")
 
@@ -427,6 +470,74 @@ def choose_directory():
     if folder:
         saveas_entry_var.set(folder)
     check_download_ready()
+
+
+def choose_mask_layer():
+    filetypes = [
+        ("Vector files", "*.shp *.gpkg *.kml *.geojson *.json"),
+        ("Shapefile", "*.shp"),
+        ("GeoPackage", "*.gpkg"),
+        ("KML", "*.kml"),
+        ("GeoJSON", "*.geojson *.json"),
+        ("All files", "*.*")
+    ]
+
+    filepath = filedialog.askopenfilename(
+        title=LANG[current_lang]["mask"],
+        filetypes=filetypes
+    )
+
+    if filepath:
+        mask_entry_var.set(filepath)
+
+    check_download_ready()
+    update_preview_button_state()
+
+
+def get_mask_polygon():
+    mask_path = mask_entry_var.get().strip()
+
+    if not mask_path or not os.path.exists(mask_path):
+        raise ValueError(LANG[current_lang]["error_mask"])
+
+    try:
+        gdf_mask = gpd.read_file(mask_path, engine="pyogrio")
+    except Exception as exc:
+        raise ValueError(f"{LANG[current_lang]['error_mask']}\n{exc}")
+
+    if gdf_mask.empty or gdf_mask.geometry.isna().all():
+        raise ValueError(LANG[current_lang]["error_mask"])
+
+    gdf_mask = gdf_mask[gdf_mask.geometry.notna()].copy()
+
+    if gdf_mask.crs is None:
+        gdf_mask = gdf_mask.set_crs(epsg=4326)
+    else:
+        gdf_mask = gdf_mask.to_crs(epsg=4326)
+
+    polygon = gdf_mask.geometry.union_all()
+
+    if polygon.is_empty:
+        raise ValueError(LANG[current_lang]["error_mask"])
+
+    return polygon
+
+
+def toggle_mask():
+    if mask_checkbutton_var.get():
+        mask_button.config(state="normal", cursor="hand2")
+        mask_entry.config(state="readonly")
+        name_checkbutton_var.set(False)
+        point_checkbutton_var.set(False)
+        toggle_name()
+        toggle_point()
+    else:
+        mask_entry_var.set("")
+        mask_button.config(state="disabled", cursor="arrow")
+        mask_entry.config(state="disabled")
+
+    check_download_ready()
+    update_preview_button_state()
 
 
 def clean_nodes_from_edges(nodes, edges):
@@ -445,6 +556,7 @@ def clear_all():
 
     name_checkbutton_var.set(False)
     point_checkbutton_var.set(False)
+    mask_checkbutton_var.set(False)
     simplify_checkbutton_var.set(False)
 
     name_entry.delete(0, tk.END)
@@ -454,6 +566,7 @@ def clear_all():
     angle_threshold_var.set("")
     tolerance_var.set("")
     saveas_entry_var.set("")
+    mask_entry_var.set("")
     angle_threshold_var.set(5)
     tolerance_var.set(10)
     buildings_var.set(False)
@@ -462,6 +575,7 @@ def clear_all():
     water_var.set(False)
     toggle_name()
     toggle_point()
+    toggle_mask()
     toggle_simplify()
 
     progress_bar_var.set(0)
@@ -710,8 +824,9 @@ def run_download():
 
             safe_place = make_safe_filename(place)
             filename_base = f"rcl_{safe_place}"
+            download_mode = "name"
 
-        else:
+        elif point_checkbutton_var.get():
             lat = float(lat_entry_var.get())
             lon = float(long_entry_var.get())
             radius = float(radius_entry_var.get())
@@ -731,6 +846,29 @@ def run_download():
             filename_base = make_safe_filename(
                 f"rcl_{coord_part}_r{int(radius)}"
             )
+            download_mode = "point"
+
+        elif mask_checkbutton_var.get():
+            mask_path = mask_entry_var.get().strip()
+            polygon = get_mask_polygon()
+
+            location_info = f"{LANG[current_lang]['mask']}: {os.path.basename(mask_path)}"
+
+            g = ox.graph_from_polygon(
+                polygon,
+                custom_filter=custom_filter,
+                simplify=simplify_flag
+            )
+
+            check_cancel()
+
+            filename_base = make_safe_filename(
+                f"rcl_{os.path.splitext(os.path.basename(mask_path))[0]}"
+            )
+            download_mode = "mask"
+
+        else:
+            raise ValueError(LANG[current_lang]["error_name_point"])
 
         # ---------------------------------------------------
         mainwindow.after(0, lambda: set_progress(30, "status_processing"))
@@ -922,16 +1060,21 @@ def run_download():
 
             buildings_tags = {"building": True}
 
-            if name_checkbutton_var.get():
+            if download_mode == "name":
                 gdf_buildings = ox.features_from_place(
                     place,
                     buildings_tags
                 )
-            else:
+            elif download_mode == "point":
                 gdf_buildings = ox.features_from_point(
                     (lat, lon),
                     buildings_tags,
                     dist=radius
+                )
+            else:
+                gdf_buildings = ox.features_from_polygon(
+                    polygon,
+                    buildings_tags
                 )
 
             if not gdf_buildings.empty:
@@ -960,16 +1103,21 @@ def run_download():
                 ]
             }
 
-            if name_checkbutton_var.get():
+            if download_mode == "name":
                 gdf_veg = ox.features_from_place(
                     place,
                     vegetation_tags
                 )
-            else:
+            elif download_mode == "point":
                 gdf_veg = ox.features_from_point(
                     (lat, lon),
                     vegetation_tags,
                     dist=radius
+                )
+            else:
+                gdf_veg = ox.features_from_polygon(
+                    polygon,
+                    vegetation_tags
                 )
 
             if not gdf_veg.empty:
@@ -991,16 +1139,21 @@ def run_download():
                 "natural": ["tree", "tree_row"]
             }
 
-            if name_checkbutton_var.get():
+            if download_mode == "name":
                 gdf_park = ox.features_from_place(
                     place,
                     park_tags
                 )
-            else:
+            elif download_mode == "point":
                 gdf_park = ox.features_from_point(
                     (lat, lon),
                     park_tags,
                     dist=radius
+                )
+            else:
+                gdf_park = ox.features_from_polygon(
+                    polygon,
+                    park_tags
                 )
 
             if not gdf_park.empty:
@@ -1022,16 +1175,21 @@ def run_download():
                 "waterway": True
             }
 
-            if name_checkbutton_var.get():
+            if download_mode == "name":
                 gdf_water = ox.features_from_place(
                     place,
                     water_tags
                 )
-            else:
+            elif download_mode == "point":
                 gdf_water = ox.features_from_point(
                     (lat, lon),
                     water_tags,
                     dist=radius
+                )
+            else:
+                gdf_water = ox.features_from_polygon(
+                    polygon,
+                    water_tags
                 )
 
             if not gdf_water.empty:
@@ -1220,6 +1378,7 @@ def set_language(lang):
     save_preview_button.config(text=LANG[lang]["plot"])
     name_checkbutton.config(text=LANG[lang]["name"])
     point_checkbutton.config(text=LANG[lang]["point"])
+    mask_checkbutton.config(text=LANG[lang]["mask"])
     radius_label.config(text=LANG[lang]["radius"])
     simplify_checkbutton.config(text=LANG[lang]["simplify"])
     angle_threshold_label.config(text=LANG[lang]["angular_threshold"])
@@ -1249,6 +1408,7 @@ def set_language(lang):
     help_menu.entryconfig(2, label=LANG[lang]["rg_doc"])
     tooltip_name.text = LANG[lang]["tooltip_name"]
     tooltip_point.text = LANG[lang]["tooltip_point"]
+    tooltip_mask.text = LANG[lang]["tooltip_mask"]
     tooltip_radius.text = LANG[lang]["tooltip_radius"]
     tooltip_simplify.text = LANG[lang]["tooltip_simplify"]
     tooltip_angle.text = LANG[lang]["tooltip_angle"]
@@ -1359,7 +1519,9 @@ def toggle_name():
     if name_checkbutton_var.get():
         name_entry.config(state="normal")
         point_checkbutton_var.set(False)
+        mask_checkbutton_var.set(False)
         toggle_point()
+        toggle_mask()
     else:
         name_entry.delete(0, tk.END)
         name_entry.config(state="disabled")
@@ -1373,7 +1535,9 @@ def toggle_point():
         long_entry.config(state="normal")
         radius_entry.config(state="normal")
         name_checkbutton_var.set(False)
+        mask_checkbutton_var.set(False)
         toggle_name()
+        toggle_mask()
     else:
         lat_entry_var.set("")
         long_entry_var.set("")
@@ -1396,8 +1560,15 @@ def toggle_simplify():
 
 def update_button_styles():
     saveas_button.configure(bootstyle="info")
+    mask_button.configure(bootstyle="info")
     clean_button.configure(bootstyle="warning")
     download_button.configure(bootstyle="primary")
+    if dark_mode_var.get():
+        btn_en.configure(bootstyle="dark")
+        btn_pt.configure(bootstyle="dark")
+    else:
+        btn_en.configure(bootstyle="light")
+        btn_pt.configure(bootstyle="light")
     progress_bar.configure(bootstyle=progress_state)
 
 
@@ -1485,6 +1656,13 @@ def update_preview_button_state():
         except ValueError:
             preview_button.config(state="disabled", cursor="arrow")
 
+    elif mask_checkbutton_var.get():
+
+        if mask_entry_var.get().strip():
+            preview_button.config(state="normal", cursor="hand2")
+        else:
+            preview_button.config(state="disabled", cursor="arrow")
+
     else:
         preview_button.config(state="disabled", cursor="arrow")
 
@@ -1535,7 +1713,7 @@ class ToolTip:
 ############################################# Graphic User Interface (GUI)#############################################
 # Main window
 mainwindow = tb.Window(themename="flatly")
-mainwindow.title("OSM2Syntax, v. 1.0.4")
+mainwindow.title("OSM2Syntax, v. 1.1.0")
 mainwindow.resizable(False, False)
 set_window_icon(mainwindow)
 
@@ -1558,6 +1736,7 @@ separator.grid(row=0, column=1, pady=30, sticky="ns")
 right_panel = tb.Frame(main_container)
 right_panel.grid(row=0, column=2, sticky="nsew")
 right_panel.columnconfigure(0, weight=1)
+right_panel.rowconfigure(1, weight=1)
 
 # Upper Menu
 menubar = tb.Menu(mainwindow)
@@ -1625,9 +1804,18 @@ flag_br_img = Image.open(os.path.join(BASE_PATH, "icon_br.png")).resize((18, 18)
 flag_br_icon = ImageTk.PhotoImage(flag_br_img)
 flag_uk_img = Image.open(os.path.join(BASE_PATH, "icon_uk.png")).resize((18, 18))
 flag_uk_icon = ImageTk.PhotoImage(flag_uk_img)
-logo_light_img = Image.open(os.path.join(BASE_PATH, "logo_txt_black.png"))
+logo_light_img = Image.open("logo_txt_black.png")
+logo_light_img = logo_light_img.resize(
+    (int(logo_light_img.width * 0.6),
+     int(logo_light_img.height * 0.6)),
+    Image.LANCZOS)
 logo_light = ImageTk.PhotoImage(logo_light_img)
-logo_dark_img = Image.open(os.path.join(BASE_PATH, "logo_txt_white.png"))
+logo_dark_img = Image.open("logo_txt_white.png")
+logo_dark_img = logo_dark_img.resize(
+    (int(logo_dark_img.width * 0.6),
+     int(logo_dark_img.height * 0.6)),
+    Image.LANCZOS
+)
 logo_dark = ImageTk.PhotoImage(logo_dark_img)
 
 # Header frame
@@ -1661,22 +1849,27 @@ latlong_frame.rowconfigure(0, weight=1)
 latlong_frame.rowconfigure(1, weight=1)
 latlong_frame.columnconfigure(0, weight=1)
 
+mask_frame = tb.Frame(left_panel)
+mask_frame.grid(row=5, column=0, sticky="ew")
+mask_frame.columnconfigure(0, weight=0)
+mask_frame.columnconfigure(1, weight=1)
+
 simplify_checkbutton_frame = tb.Frame(left_panel)
-simplify_checkbutton_frame.grid(row=5, column=0, sticky="ew")
+simplify_checkbutton_frame.grid(row=6, column=0, sticky="ew")
 simplify_checkbutton_frame.columnconfigure(0, weight=1)
-simplify_checkbutton_frame.rowconfigure(0, weight=1)
+simplify_checkbutton_frame.rowconfigure(1, weight=1)
 
 simplify_frame = tb.Frame(left_panel)
-simplify_frame.grid(row=6, column=0, sticky="ew")
+simplify_frame.grid(row=7, column=0, sticky="ew")
 simplify_frame.rowconfigure(0, weight=1)
 simplify_frame.columnconfigure(0, weight=1)
 
 background_label_frame = tb.Frame(left_panel)
-background_label_frame.grid(row=7, column=0, sticky="ew")
+background_label_frame.grid(row=8, column=0, sticky="ew")
 background_label_frame.rowconfigure(0, weight=1)
 
 background_frame = tb.Frame(left_panel)
-background_frame.grid(row=8, column=0, sticky="ew")
+background_frame.grid(row=9, column=0, sticky="ew")
 background_frame.rowconfigure(0, weight=1)
 background_frame.columnconfigure(0, weight=1)
 background_frame.columnconfigure(1, weight=1)
@@ -1684,22 +1877,22 @@ background_frame.columnconfigure(2, weight=1)
 background_frame.columnconfigure(3, weight=1)
 
 saveas_label_frame = tb.Frame(left_panel)
-saveas_label_frame.grid(row=9, column=0, sticky="ew")
+saveas_label_frame.grid(row=10, column=0, sticky="ew")
 saveas_frame = tb.Frame(left_panel)
-saveas_frame.grid(row=10, column=0, sticky="ew")
+saveas_frame.grid(row=11, column=0, sticky="ew")
 saveas_frame.rowconfigure(0, weight=1)
 saveas_frame.columnconfigure(0, weight=1)
 saveas_frame.columnconfigure(1, weight=25)
 
 download_frame = tb.Frame(left_panel)
-download_frame.grid(row=11, column=0, sticky="ew")
+download_frame.grid(row=12, column=0, sticky="ew")
 download_frame.rowconfigure(0, weight=1)
 download_frame.columnconfigure(0, weight=1)
 download_frame.columnconfigure(1, weight=1)
 download_frame.columnconfigure(2, weight=1)
 
 status_frame = tb.Frame(left_panel)
-status_frame.grid(row=12, column=0, sticky="ew")
+status_frame.grid(row=13, column=0, sticky="ew")
 status_frame.rowconfigure(0, weight=1)
 status_frame.columnconfigure(0, weight=1)
 
@@ -1708,13 +1901,13 @@ status_frame.columnconfigure(0, weight=1)
 name_checkbutton_var = tk.BooleanVar()
 name_checkbutton = tb.Checkbutton(name_checkbutton_frame, text='Name (OSM Nomitatim)', variable=name_checkbutton_var,
                                   command=toggle_name, bootstyle="info-round-toggle", cursor="hand2")
-name_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 10), sticky='ew')
+name_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 5), sticky='ew')
 tooltip_name = ToolTip(name_checkbutton, LANG[current_lang]["tooltip_name"])
 
 # Dark Mode Button
 darktheme_button = tb.Button(name_checkbutton_frame, text='Dark Mode', command=toggle_dark_mode, image=sun_icon,
                              bootstyle="primary", compound="left", cursor="hand2", width=10)
-darktheme_button.grid(row=0, column=1, padx=(0, 20), pady=(0, 10))
+darktheme_button.grid(row=0, column=1, padx=(0, 20), pady=(0, 5))
 
 # Name Entry
 name_entry_var = tk.StringVar()
@@ -1727,28 +1920,28 @@ point_checkbutton_var = tk.BooleanVar()
 point_checkbutton = tb.Checkbutton(point_checkbutton_frame, text='Point (Decimal Degrees)',
                                    variable=point_checkbutton_var, command=toggle_point, cursor="hand2",
                                    bootstyle="info-round-toggle")
-point_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 10), sticky='ew')
+point_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 5), sticky='ew')
 tooltip_point = ToolTip(point_checkbutton, LANG[current_lang]["tooltip_point"])
 
 # Lat Long Label
 lat_label = tb.Label(latlong_frame, text='Latitude:', foreground='#808080', justify='left', anchor='w')
-lat_label.grid(row=0, column=0, padx=20, pady=(0, 3), sticky='ew')
+lat_label.grid(row=0, column=0, padx=20, sticky='ew')
 
 # Lat Entry
 lat_entry_var = tk.StringVar()
 lat_entry_var.trace_add("write", lambda *args: update_preview_button_state())
 lat_entry = tb.Entry(latlong_frame, textvariable=lat_entry_var, state='disabled', style="Modern.TEntry", width=10)
-lat_entry.grid(row=1, column=0, padx=20, pady=(0, 5), sticky='ew')
+lat_entry.grid(row=1, column=0, padx=20, sticky='ew')
 
 # long Label
 long_label = tb.Label(latlong_frame, text='Longitude:', foreground='#808080', justify='left', anchor='w')
-long_label.grid(row=2, column=0, padx=20, pady=(0, 3), sticky='ew')
+long_label.grid(row=2, column=0, padx=20, sticky='ew')
 
 # Long Entry
 long_entry_var = tk.StringVar()
 long_entry_var.trace_add("write", lambda *args: update_preview_button_state())
 long_entry = tb.Entry(latlong_frame, textvariable=long_entry_var, state='disabled', style="Modern.TEntry", width=10)
-long_entry.grid(row=3, column=0, padx=20, pady=(0, 5), sticky='ew')
+long_entry.grid(row=3, column=0, padx=20, sticky='ew')
 
 # Radius Label
 radius_label = tb.Label(latlong_frame, text='Radius (m):', foreground='#808080', justify='left', anchor='w')
@@ -1761,29 +1954,44 @@ radius_entry_var.trace_add("write", lambda *args: update_preview_button_state())
 radius_entry = tb.Entry(latlong_frame, textvariable=radius_entry_var, state='disabled', style="Modern.TEntry", width=10)
 radius_entry.grid(row=5, column=0, padx=20, pady=(0, 20), sticky='ew')
 
+# Mask Checkbutton
+mask_checkbutton_var = tk.BooleanVar()
+mask_checkbutton = tb.Checkbutton(mask_frame, text='Mask Layer', variable=mask_checkbutton_var,
+                                   command=toggle_mask, cursor="hand2", bootstyle="info-round-toggle")
+mask_checkbutton.grid(row=0, column=0, columnspan=2, padx=20, pady=(0, 5), sticky='ew')
+tooltip_mask = ToolTip(mask_checkbutton, LANG[current_lang]["tooltip_mask"])
+
+mask_button = tb.Button(mask_frame, text='...', width=2, command=choose_mask_layer,
+                        bootstyle="info", compound="left", cursor="arrow", state="disabled")
+mask_button.grid(row=1, column=0, padx=(20, 7), pady=(0, 20), sticky='w')
+mask_entry_var = tk.StringVar()
+mask_entry_var.trace_add("write", lambda *args: update_preview_button_state())
+mask_entry = tb.Entry(mask_frame, textvariable=mask_entry_var, state='disabled', width=30, style="Modern.TEntry")
+mask_entry.grid(row=1, column=1, padx=(0, 20), pady=(0, 20), sticky='ew')
+
 # Simplify Checkbutton
 simplify_checkbutton_var = tk.BooleanVar()
 simplify_checkbutton = tb.Checkbutton(simplify_checkbutton_frame, text="Simplify RCL",
                                       variable=simplify_checkbutton_var, command=toggle_simplify, cursor="hand2",
                                       bootstyle="info-round-toggle")
-simplify_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 10), sticky='ew')
+simplify_checkbutton.grid(row=0, column=0, padx=20, pady=(0, 5), sticky='ew')
 tooltip_simplify = ToolTip(simplify_checkbutton, LANG[current_lang]["tooltip_simplify"])
 
 # Angle Threshold Label
 angle_threshold_var = tk.IntVar(value=5)
 angle_threshold_label = tb.Label(simplify_frame, text='Angle Threshold:', foreground='#808080', anchor='w')
-angle_threshold_label.grid(row=0, column=0, padx=20, pady=(0, 3), sticky='ew')
+angle_threshold_label.grid(row=0, column=0, padx=20, sticky='ew')
 tooltip_angle = ToolTip(angle_threshold_label, LANG[current_lang]["tooltip_angle"])
 
 # Angle Threshold Entry
 angle_threshold_entry = tb.Entry(simplify_frame, textvariable=angle_threshold_var, state='disabled',
                                  style="Modern.TEntry", width=10)
-angle_threshold_entry.grid(row=1, column=0, columnspan=2, padx=20, pady=(0, 5), sticky='ew')
+angle_threshold_entry.grid(row=1, column=0, columnspan=2, padx=20, sticky='ew')
 
 # Tolerance Label
 tolerance_var = tk.IntVar(value=10)
 tolerance_label = tb.Label(simplify_frame, text='Tolerance:', foreground='#808080', anchor='w')
-tolerance_label.grid(row=2, column=0, padx=20, pady=(0, 3), sticky='ew')
+tolerance_label.grid(row=2, column=0, padx=20, sticky='ew')
 tooltip_tolerance = ToolTip(tolerance_label, LANG[current_lang]["tooltip_tolerance"])
 
 # Tolerance Entry
@@ -1827,72 +2035,77 @@ saveas_label.grid(row=0, column=0, padx=20, pady=(0, 5), sticky='ew')
 saveas_button = tb.Button(saveas_frame, text='...', width=2, command=choose_directory, bootstyle="info",
                           compound="left", cursor="hand2")
 
-saveas_button.grid(row=0, column=0, padx=(20, 10), pady=(0, 10), sticky='w')
+saveas_button.grid(row=0, column=0, padx=(20, 0), pady=(0, 5), sticky='w')
 
 # Save As Entry
 saveas_entry_var = tk.StringVar()
 saveas_entry = tb.Entry(saveas_frame, textvariable=saveas_entry_var, width=30, style="Modern.TEntry")
-saveas_entry.grid(row=0, column=1, padx=(0, 20), pady=(0, 10), sticky='ew')
+saveas_entry.grid(row=0, column=1, padx=(0, 20), pady=(0, 5), sticky='ew')
 
 # Download Button
 download_button = tb.Button(download_frame, text='Download', command=download_data, bootstyle="primary",
                             image=download_icon, compound="left", state="disabled", width=10)
-download_button.grid(row=0, column=0, padx=20, pady=(0, 20))
+download_button.grid(row=0, column=0, padx=20, pady=(0, 5))
 
 # Cancel Button
 cancel_button = tb.Button(download_frame, text='Cancel', command=cancel_download, bootstyle="danger",
                           state="disabled", image=cancel_icon, compound='left', width=10)
-cancel_button.grid(row=0, column=1, padx=(0, 20), pady=(0, 20))
+cancel_button.grid(row=0, column=1, padx=(0, 20), pady=(0, 5))
 
 # Clean Button
 clean_button = tb.Button(download_frame, text='Clear', command=clear_all, bootstyle="warning", image=clear_icon,
                          compound="left", width=10, cursor="hand2")
-clean_button.grid(row=0, column=2, padx=(0, 20), pady=(0, 20))
+clean_button.grid(row=0, column=2, padx=(0, 20), pady=(0, 5))
 
 # progress bar
 progress_bar_var = tk.DoubleVar()
 progress_bar = tb.Progressbar(download_frame, variable=progress_bar_var, bootstyle="primary", mode="determinate")
-progress_bar.grid(row=1, column=0, columnspan=3, padx=20, pady=(0, 3), sticky="ew")
+progress_bar.grid(row=1, column=0, columnspan=3, padx=20, pady=(0, 5), sticky="ew")
 progress_state = "primary"
 
 # status label
 status_txt = tb.Label(status_frame, text="Status: Waiting")
-status_txt.grid(row=0, column=0, columnspan=8, padx=20, pady=(0, 20))
+status_txt.grid(row=0, column=0, columnspan=8, padx=20, pady=(0, 5))
 
 ############################################### RIGHT PANEL ###########################################################
 
 # Right Panel Frames
 preview_top_frame = tb.Frame(right_panel)
-preview_top_frame.grid(row=0, column=0, pady=(20, 10))
+preview_top_frame.grid(row=0, column=0, pady=(10, 5))
 
 preview_frame = tb.Frame(right_panel)
-preview_frame.grid(row=1, column=0, padx=20, pady=10, sticky="n")
+preview_frame.grid(row=1, column=0, padx=20, sticky="n")
 
-lang_frame = tb.Frame(right_panel)
-lang_frame.grid(row=2, column=0, padx=10, pady=10, sticky='e')
+preview_bottom_frame = tb.Frame(right_panel)
+preview_bottom_frame.grid(row=2, column=0, padx=20, pady=(0, 5), sticky='ew')
+preview_bottom_frame.columnconfigure(0, weight=1)
+preview_bottom_frame.columnconfigure(1, weight=0)
+
+lang_frame = tb.Frame(preview_bottom_frame)
+lang_frame.grid(row=1, column=0, columnspan=2, pady=(8, 0))
 
 # Right Panel Widgets
 # Preview Button
 preview_button = tb.Button(preview_top_frame, text="Preview", command=preview_data, bootstyle="info",
                            image=preview_icon, compound="left", state="disabled", width=10)
-preview_button.grid(row=0, column=0, padx=(0, 20), pady=(10, 0))
+preview_button.grid(row=0, column=0, padx=(0, 20), pady=(5, 0))
 
 # Plot Preview
 save_preview_button = tb.Button(preview_top_frame, text="Plot", command=save_preview, image=save_preview_icon,
                                 compound="left", bootstyle="primary", state="disabled", width=10)
-save_preview_button.grid(row=0, column=1, pady=(10, 0))
+save_preview_button.grid(row=0, column=1, pady=(5, 0))
 
 # Preview Status
-preview_status = tb.Label(right_panel, text="No preview loaded.", anchor="center")
-preview_status.grid(row=2, column=0, pady=(44, 20))
+preview_status = tb.Label(preview_bottom_frame, text="No preview loaded.", anchor="center", justify="center")
+preview_status.grid(row=0, column=0, columnspan=2, sticky="ew")
 
 # Language Buttons
 btn_en = tb.Button(lang_frame, image=flag_uk_icon, bootstyle='light', command=lambda: set_language("en"),
-                   cursor="hand2")
-btn_en.grid(row=0, column=0, padx=3)
+                   cursor="hand2", width=3)
+btn_en.grid(row=0, column=0, padx=5)
 btn_pt = tb.Button(lang_frame, image=flag_br_icon, bootstyle="light", command=lambda: set_language("pt"),
-                   cursor="hand2")
-btn_pt.grid(row=0, column=1, padx=3)
+                   cursor="hand2", width=3)
+btn_pt.grid(row=0, column=1, padx=(0,5))
 
 # Preview Area
 fig = plt.Figure(figsize=(5, 5.7), dpi=120)
@@ -1905,6 +2118,9 @@ ax.set_frame_on(False)
 canvas = FigureCanvasTkAgg(fig, master=preview_frame)
 canvas_widget = canvas.get_tk_widget()
 canvas_widget.pack(fill="both", expand=True)
+
+# Center window after all widgets are rendered
+mainwindow.after(100, lambda: center_window(mainwindow))
 
 # GUI Main Loop
 mainwindow.mainloop()
