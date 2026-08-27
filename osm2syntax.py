@@ -12,7 +12,6 @@ import sys
 
 # Third-Party Libraries
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import osmnx as ox
 import geopandas as gpd
@@ -291,7 +290,12 @@ def build_graph():
             raise ValueError(LANG[current_lang]["empty_name"])
 
         try:
-            g = ox.graph_from_place(place, custom_filter=custom_filter, simplify=simplify_flag)
+            g = ox.graph_from_place(
+                place,
+                custom_filter=custom_filter,
+                simplify=simplify_flag,
+                truncate_by_edge=True
+            )
         except Exception:
             raise ValueError(LANG[current_lang]["error_name"])
 
@@ -315,15 +319,25 @@ def build_graph():
             raise ValueError(LANG[current_lang]["error_rad"])
 
         try:
-            g = ox.graph_from_point((lat, lon), dist=radius, custom_filter=custom_filter,
-                                    simplify=simplify_flag)
+            g = ox.graph_from_point(
+                (lat, lon),
+                dist=radius,
+                custom_filter=custom_filter,
+                simplify=simplify_flag,
+                truncate_by_edge=True
+            )
         except Exception:
             raise ValueError(LANG[current_lang]["error_coord_query"])
 
     # Graph by mask layer
     elif mask_checkbutton_var.get():
         polygon = get_mask_polygon()
-        g = ox.graph_from_polygon(polygon, custom_filter=custom_filter, simplify=simplify_flag)
+        g = ox.graph_from_polygon(
+            polygon,
+            custom_filter=custom_filter,
+            simplify=simplify_flag,
+            truncate_by_edge=True
+        )
 
     else:
         raise ValueError(LANG[current_lang]["error_name_point"])
@@ -342,7 +356,12 @@ def build_graph_preview():
             raise ValueError(LANG[current_lang]["empty_name"])
 
         try:
-            g = ox.graph_from_place(place, custom_filter=custom_filter, simplify=True)
+            g = ox.graph_from_place(
+                place,
+                custom_filter=custom_filter,
+                simplify=True,
+                truncate_by_edge=True
+            )
         except Exception:
             raise ValueError(LANG[current_lang]["error_name"])
 
@@ -360,21 +379,34 @@ def build_graph_preview():
             raise ValueError(LANG[current_lang]["error_rad"])
 
         try:
-            g = ox.graph_from_point((lat, lon), dist=radius, custom_filter=custom_filter, simplify=False)
+            g = ox.graph_from_point(
+                (lat, lon),
+                dist=radius,
+                custom_filter=custom_filter,
+                simplify=False,
+                truncate_by_edge=True
+            )
         except Exception:
             raise ValueError(LANG[current_lang]["error_coord_query"])
 
     # Graph preview by mask layer
     elif mask_checkbutton_var.get():
         polygon = get_mask_polygon()
-        g = ox.graph_from_polygon(polygon, custom_filter=custom_filter, simplify=True)
+        g = ox.graph_from_polygon(
+            polygon,
+            custom_filter=custom_filter,
+            simplify=True,
+            truncate_by_edge=True
+        )
 
     else:
         raise ValueError(LANG[current_lang]["error_name_point"])
 
+    # Keep all connected components by default.
+    # Previously, OSM2Syntax kept only the largest connected component,
+    # which could remove valid disconnected road segments such as rural roads
+    # or highways with small OSM connectivity gaps.
     g = g.to_undirected()
-    largest_cc = max(nx.connected_components(g), key=len)
-    g = g.subgraph(largest_cc).copy()
     g = ox.project_graph(g)
     return g
 
@@ -776,7 +808,8 @@ def run_download():
             g = ox.graph_from_place(
                 place,
                 custom_filter=custom_filter,
-                simplify=simplify_flag
+                simplify=simplify_flag,
+                truncate_by_edge=True
             )
 
             check_cancel()
@@ -796,7 +829,8 @@ def run_download():
                 (lat, lon),
                 dist=radius,
                 custom_filter=custom_filter,
-                simplify=simplify_flag
+                simplify=simplify_flag,
+                truncate_by_edge=True
             )
 
             check_cancel()
@@ -816,7 +850,8 @@ def run_download():
             g = ox.graph_from_polygon(
                 polygon,
                 custom_filter=custom_filter,
-                simplify=simplify_flag
+                simplify=simplify_flag,
+                truncate_by_edge=True
             )
 
             check_cancel()
@@ -832,12 +867,11 @@ def run_download():
         # ---------------------------------------------------
         mainwindow.after(0, lambda: set_progress(30, "status_processing"))
 
+        # Keep all connected components by default.
+        # Previously, OSM2Syntax kept only the largest connected component,
+        # which could remove valid disconnected road segments such as rural roads
+        # or highways with small OSM connectivity gaps.
         g = g.to_undirected()
-        check_cancel()
-
-        largest_cc = max(nx.connected_components(g), key=len)
-        g = g.subgraph(largest_cc).copy()
-
         check_cancel()
 
         g_proj = ox.project_graph(g)
