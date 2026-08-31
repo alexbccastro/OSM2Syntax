@@ -1,12 +1,46 @@
+__pycache__/
+*.py[cod]
+*$py.class
+cache/
+# Distribution / packaging
+build/
+dist/
+*.spec
+*.egg-info/
+.eggs/
+*.whl
+
+# PyInstaller artifacts
+dist/
+build/
+*.manifest
+*.spec
+
+# Virtual environments
+.env
+.venv
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+
+# Logs
+*.log
+
+# Local build scripts and generated executables
+*.sh
+!build_linux.sh
+osm2syntax
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Virtual environment
-venv/
-.env/
 
 # PyCharm
 .idea/
@@ -17,3 +51,4 @@ Thumbs.db
 
 # Logs
 *.log
+.part

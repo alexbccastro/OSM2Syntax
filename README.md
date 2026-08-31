@@ -49,53 +49,97 @@ The graphical interface allows users to:
 ```bash
 git clone https://github.com/alexbccastro/OSM2Syntax.git
 cd OSM2Syntax
-Create a virtual environment
+```
+
+### Create a virtual environment
+
+```bash
 python -m venv venv
+```
 
-Activate the environment
+### Activate the environment
 
-Windows
+Windows:
 
+```bat
 venv\Scripts\activate
+```
 
-Linux / macOS
+Linux / macOS:
 
+```bash
 source venv/bin/activate
-Install dependencies
+```
+
+### Install dependencies
+
+```bash
 pip install -r requirements.txt
-Dependencies
+```
+
+## Linux Build and Run
+
+OSM2Syntax uses Tkinter for its desktop interface. On Linux, install the system Tk package before building or running the app.
+
+Arch Linux / Manjaro:
+
+```bash
+sudo pacman -S --needed tk
+```
+
+Ubuntu / Debian:
+
+```bash
+sudo apt install python3-tk
+```
+
+Build the Linux executable:
+
+```bash
+./build_linux.sh
+```
+
+Run the packaged application:
+
+```bash
+./dist/osm2syntax
+```
+
+For development, you can also run the app directly from the virtual environment:
+
+```bash
+python osm2syntax.py
+```
+
+## Dependencies
 
 Main libraries used in this project:
 
-matplotlib
+- matplotlib
+- networkx
+- numpy
+- osmnx
+- geopandas
+- pandas
+- pyogrio
+- pyproj
+- ttkbootstrap
+- pillow
+- shapely
 
-networkx
-
-numpy
-
-osmnx
-
-ttkbootstrap
-
-pillow
-
-shapely
-
-How to Use
+## How to Use
 
 Select the geographic reference:
 
-Name (example: João Pessoa, Brazil)
-
-Coordinates + radius
+- Name (example: João Pessoa, Brazil)
+- Coordinates + radius
 
 Click Preview to visualize the road network.
 
 Optionally enable Simplify RCL and adjust parameters:
 
-Angular Threshold
-
-Tolerance
+- Angular Threshold
+- Tolerance
 
 Select background layers if needed.
 
@@ -103,63 +147,50 @@ Choose the folder to save the data.
 
 Click Download.
 
-Output Files
+## Output Files
 
 The software generates:
 
-rcl_location.gpkg
-rcl_location_buildings.gpkg
-rcl_location_vegetation.gpkg
-rcl_location_park.gpkg
-rcl_location_water.gpkg
-rcl_location_report.txt
+- rcl_location.gpkg
+- rcl_location_buildings.gpkg
+- rcl_location_vegetation.gpkg
+- rcl_location_park.gpkg
+- rcl_location_water.gpkg
+- rcl_location_report.txt
 
 The report includes:
 
-download date
+- download date
+- network type
+- simplification parameters
+- vertex reduction metrics
+- length variation
+- download time
 
-network type
-
-simplification parameters
-
-vertex reduction metrics
-
-length variation
-
-download time
-
-Preview Export
+## Preview Export
 
 The preview map can be exported as:
 
-PNG
+- PNG
+- JPEG
+- PDF
 
-JPEG
+## Technologies
 
-PDF
+- Python
+- OpenStreetMap
+- OSMnx
+- NetworkX
+- Matplotlib
+- Tkinter
+- ttkbootstrap
 
-Technologies
-
-Python
-
-OpenStreetMap
-
-OSMnx
-
-NetworkX
-
-Matplotlib
-
-Tkinter
-
-ttkbootstrap
-
-Author
+## Author
 
 Alexandre Augusto Bezerra da Cunha Castro
 
 March 2026
 
-License
+## License
 
 This project is licensed under the MIT License.
